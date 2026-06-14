@@ -1,0 +1,32 @@
+# systemd unit for OBSCURA.
+#
+# Installed to /etc/systemd/system/obscura.service by deploy/install.sh. It runs
+# the container stack via the `obscura` CLI, so the application code lives inside
+# the image rather than on the host — the intended "users can't see the code"
+# deployment model.
+#
+#   sudo systemctl start obscura
+#   sudo systemctl enable obscura      # start on boot
+#   sudo systemctl status obscura
+#   journalctl -u obscura -f           # follow logs
+#
+# WorkingDirectory is rewritten to the real install path by install.sh.
+[Unit]
+Description=OBSCURA — dark-web OSINT toolkit
+Documentation=https://github.com/HashemALSKKkAF/OBSCURA
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/obscura
+# `start --docker --build` runs `docker compose up --build` in the foreground;
+# systemd owns the process lifecycle and ExecStop tears the stack down cleanly.
+ExecStart=/usr/local/bin/obscura start --docker --build
+ExecStop=/usr/local/bin/obscura stop --docker
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

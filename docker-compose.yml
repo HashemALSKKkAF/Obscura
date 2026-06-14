@@ -1,0 +1,45 @@
+# OBSCURA — container stack.
+#
+#   docker compose up --build        # build + run, logs in the foreground
+#   docker compose up -d             # run detached
+#   docker compose logs -f           # follow logs
+#   docker compose down              # stop & remove
+#
+# Or via the CLI:  obscura start --docker --build  /  obscura logs --docker -f
+#
+# The container starts its own embedded Tor daemon (see entrypoint.sh), so no
+# host Tor is required.
+services:
+  obscura:
+    build: .
+    image: obscura:latest
+    container_name: obscura
+    # Bind to localhost on the HOST by default — OBSCURA has no auth and drives
+    # Tor crawling + paid LLM calls. To expose on your LAN, change to
+    # "0.0.0.0:8501:8501" deliberately.
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      # Inside the container we bind all interfaces; the container is the
+      # isolation boundary and the host mapping above controls exposure.
+      OBSCURA_HOST: "0.0.0.0"
+      OBSCURA_PORT: "8501"
+      OBSCURA_LOG_DIR: "/app/logs"
+    # Secrets (LLM API keys, etc.) come from .env — never baked into the image.
+    # Optional so a fresh clone still boots; keys can also be entered live in the
+    # UI Configuration panel. Copy .env.example → .env to preset them.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persist the SQLite DB / crawled artifacts and the log file across
+      # container rebuilds.
+      - ./investigations:/app/investigations
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8501/api/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBSCURA | OSINT Intelligence</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="light-mode">
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-header-top">
+          <div id="brandReload" class="brand" title="Reload OBSCURA">
+            <img src="frontend/assets/logo.jpeg" alt="Logo" class="brand-logo" />
+            <span class="brand-name sidebar-label">OBSCURA</span>
+          </div>
+          <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" title="Toggle Sidebar">
+            <i class="fas fa-bars"></i>
+          </button>
+        </div>
+        <button id="newChatBtn" class="new-chat-btn">
+          <i class="fas fa-plus"></i> <span class="sidebar-label">New Investigation</span>
+        </button>
+      </div>
+
+      <div class="sidebar-search">
+        <i class="fas fa-search"></i>
+        <input type="text" id="invSearchInput" placeholder="Search..." />
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <span class="nav-section-title sidebar-label">Recent Investigations</span>
+          <div id="investigationList" class="investigation-history">
+            <!-- Loaded dynamically -->
+          </div>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="openSeedsBtn" class="footer-btn">
+          <i class="fas fa-link"></i> <span class="sidebar-label">Seed Manager</span>
+        </button>
+        <button id="openHealthBtn" class="footer-btn">
+          <i class="fas fa-heartbeat"></i> <span class="sidebar-label">Health Checks</span>
+        </button>
+        <button id="openConfigBtn" class="footer-btn">
+          <i class="fas fa-cog"></i> <span class="sidebar-label">Configuration</span>
+        </button>
+        <div class="user-profile">
+          <img src="frontend/assets/logo.jpeg" alt="User" class="user-avatar" />
+          <div class="user-info sidebar-label">
+            <span class="user-name">Analyst</span>
+            <span class="user-email">analyst@obscura.local</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-bar">
+        <button id="sidebarToggle" class="sidebar-toggle">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div id="currentInvTitle" class="current-inv-title">New Investigation</div>
+        <div class="top-bar-actions">
+          <button id="exportPdfBtn" class="btn-action" title="Export PDF">
+            <i class="fas fa-file-pdf"></i>
+            <span>PDF</span>
+          </button>
+          <button id="exportMdBtn" class="btn-action" title="Export Markdown">
+            <i class="fas fa-file-code"></i>
+            <span>Markdown</span>
+          </button>
+          <button id="themeToggle" class="btn-action">
+            <i class="fas fa-moon"></i>
+            <span>Theme</span>
+          </button>
+        </div>
+      </header>
+
+      <div id="chatContainer" class="chat-container">
+        <!-- Messages will be injected here -->
+        <div id="welcomeScreen" class="welcome-screen">
+          <img src="frontend/assets/logo.jpeg" alt="OBSCURA" class="welcome-logo" />
+          <h1>How can OBSCURA help your investigation?</h1>
+          <div class="suggested-prompts">
+            <button class="prompt-suggestion">Search for recent ransomware leaks</button>
+            <button class="prompt-suggestion">Investigate dark web identity sellers</button>
+            <button class="prompt-suggestion">Find mentions of corporate espionage</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <form id="searchForm" class="input-container">
+          <div class="input-wrapper">
+            <textarea id="queryInput" placeholder="Enter Dark Web Search Query..." rows="1" required></textarea>
+            <div class="input-actions">
+              <div id="modelSelector" class="model-selector">
+                <button type="button" id="currentModelBtn" class="current-model-btn">
+                  <span id="currentModelName">GPT-4o</span>
+                  <i class="fas fa-chevron-up"></i>
+                </button>
+                <div id="modelDropdown" class="model-dropdown hidden">
+                  <!-- Models will be injected here -->
+                </div>
+              </div>
+              <button type="button" id="stopBtn" class="stop-btn hidden" title="Stop Investigation">
+                <i class="fas fa-stop"></i>
+              </button>
+              <button type="submit" id="sendBtn" class="send-btn">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+          <p class="input-hint">OBSCURA can provide deep-web insights. Always verify critical findings.</p>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="configModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-cog"></i> Configuration</h2>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section class="config-section">
+          <h3>Model & Performance</h3>
+          <div class="form-group">
+            <label for="modelSelect">LLM Model</label>
+            <select id="modelSelect"></select>
+          </div>
+          <div class="form-group range-group">
+            <label for="threadsInput">Scraping Threads <span id="threadsValue">4</span></label>
+            <input id="threadsInput" type="range" min="1" max="16" value="4" />
+          </div>
+          <div class="form-group range-group">
+            <label for="maxResultsInput">Max Results <span id="maxResultsValue">50</span></label>
+            <input id="maxResultsInput" type="range" min="10" max="100" value="50" />
+          </div>
+        </section>
+        
+        <section class="config-section">
+          <h3>Prompt Domains</h3>
+          <div class="form-group">
+            <label for="presetSelect">Research Domain</label>
+            <select id="presetSelect"></select>
+          </div>
+          <div id="customPresetFields" class="custom-preset hidden">
+            <div class="form-group">
+              <label for="customPrompt">System Prompt</label>
+              <textarea id="customPrompt" rows="4"></textarea>
+            </div>
+            <div class="button-row">
+              <button id="savePresetBtn" class="btn secondary">Save</button>
+              <button id="deletePresetBtn" class="btn danger">Delete</button>
+            </div>
+          </div>
+          <hr />
+          <div class="form-group">
+            <label>Create New Domain</label>
+            <input id="newPresetName" type="text" placeholder="Domain name" />
+            <textarea id="newPresetPrompt" rows="3" placeholder="System prompt..."></textarea>
+            <button id="createPresetBtn" class="btn primary">Add Domain</button>
+          </div>
+        </section>
+
+        <section class="config-section">
+          <h3>Active Providers</h3>
+          <div id="providerStatus" class="status-grid"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="providerKeyModal" class="modal">
+    <div class="modal-content provider-key-modal">
+      <div class="modal-header">
+        <h2><i class="fas fa-key"></i> <span id="providerKeyModalTitle">Set API Key</span></h2>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="providerKeyModalHint" class="provider-key-hint"></p>
+        <div class="form-group">
+          <label for="providerKeyInput" id="providerKeyInputLabel">API Key</label>
+          <input id="providerKeyInput" type="password" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="providerKeyFeedback" class="provider-feedback"></div>
+        <div class="modal-actions">
+          <button id="providerKeyCancelBtn" class="btn secondary">Cancel</button>
+          <button id="providerKeySaveBtn" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="healthModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-heartbeat"></i> Health Checks</h2>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="health-actions">
+          <button id="checkLlmBtn" class="btn"><i class="fas fa-plug"></i> Check LLM</button>
+          <button id="checkSearchBtn" class="btn"><i class="fas fa-search"></i> Check Engines</button>
+          <button id="torNewnymBtn" class="btn"><i class="fas fa-random"></i> New Tor Identity</button>
+        </div>
+        <div id="healthOutput" class="health-output"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="seedsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-link"></i> Seed Manager</h2>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="add-seed-form">
+          <input id="seedUrlInput" type="url" placeholder="http://example.onion" />
+          <input id="seedLabelInput" type="text" placeholder="Label (optional)" />
+          <button id="addSeedBtn" class="btn primary">Add</button>
+        </div>
+        <div class="seed-filters">
+          <label>Filter:</label>
+          <select id="seedFilterSelect">
+            <option value="all">All</option>
+            <option value="crawled">Crawled</option>
+            <option value="uncrawled">Uncrawled</option>
+          </select>
+        </div>
+        <div id="seedList" class="seed-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="completionModal" class="modal">
+    <div class="modal-content completion-modal">
+      <div class="modal-header">
+        <h2><i class="fas fa-check-circle"></i> Investigation Complete</h2>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Your investigation has finished successfully. You can now review the results or download the generated report.</p>
+        <div class="modal-actions">
+          <button id="completionReviewBtn" class="btn primary">Review Results</button>
+          <button id="completionPdfBtn" class="btn secondary"><i class="fas fa-file-pdf"></i> PDF</button>
+          <button id="completionMdBtn" class="btn secondary"><i class="fas fa-file-code"></i> MD</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

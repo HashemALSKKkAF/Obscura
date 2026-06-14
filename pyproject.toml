@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obscura"
+description = "Automated dark-web OSINT toolkit (crawling, extraction, LLM analysis)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "OBSCURA FYP" }]
+keywords = ["osint", "dark-web", "tor", "threat-intelligence", "security"]
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/HashemALSKKkAF/OBSCURA"
+Repository = "https://github.com/HashemALSKKkAF/OBSCURA"
+
+[project.scripts]
+# Installs an `obscura` command. From a checkout, `pip install -e .` makes the
+# command point back at this directory, so it can find app.py / docker-compose.
+obscura = "cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "__version__.__version__" }
+dependencies = { file = ["requirements.txt"] }
+
+# Flat layout: the app is a set of top-level modules (not a nested package).
+# List them explicitly so the build doesn't trip over the data directories
+# (frontend/, tests/, investigations/) that sit alongside.
+[tool.setuptools]
+py-modules = [
+    "__version__", "app", "cli",
+    "api_config", "api_investigations", "api_seeds", "api_tor",
+    "constants", "crawler", "db", "env_manager", "export", "health",
+    "investigations", "llm", "llm_utils", "obscura_config", "pipeline",
+    "presets", "providers", "scrape", "search", "seeds",
+    "tor_session", "tor_utils", "web_routes",
+]

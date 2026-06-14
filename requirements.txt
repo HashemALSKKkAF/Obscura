@@ -1,0 +1,25 @@
+# Web framework (the app is Flask; serves the SPA + JSON API)
+flask
+
+# HTTP, Tor SOCKS, scraping, and JS-rendered crawling
+requests
+pysocks
+bs4
+selenium
+
+# LLM providers — LangChain integrations plus the native SDKs that llm.py
+# imports directly (openai is a hard import; google-api-core for retry types).
+langchain-openai
+langchain-anthropic
+langchain-ollama
+langchain_community
+langchain_google_genai
+openai
+google-api-core
+
+# Reporting + configuration
+reportlab
+python-dotenv
+
+# Retained from the original environment (transitive backport pin)
+backports.tarfile
