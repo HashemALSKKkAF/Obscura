@@ -23,7 +23,8 @@ import logging
 import deep_search
 import investigations as inv_db
 import rag
-from llm import filter_results, generate_summary, refine_query
+import summarizer
+from llm import filter_results, refine_query
 from scrape import scrape_multiple
 from search import get_search_results
 
@@ -48,7 +49,7 @@ class InvestigationPipeline:
         search=get_search_results,
         filter_fn=filter_results,
         scrape=scrape_multiple,
-        summarize=generate_summary,
+        summarize=summarizer.generate_summary,
         repo=inv_db,
         deep_crawl=deep_search.deep_crawl,
         to_content_map=deep_search.to_content_map,
@@ -81,6 +82,7 @@ class InvestigationPipeline:
         deep_max_pages: int = deep_search.DEFAULT_MAX_PAGES,
         use_rag: bool = False,
         rag_top_k: int = rag.DEFAULT_TOP_K,
+        summary_batch_chars: int = summarizer.DEFAULT_BATCH_CHARS,
     ):
         """Yield progress dicts, then a final dict with the saved id + artifacts."""
         yield {"status": "Refining query..."}
@@ -126,6 +128,7 @@ class InvestigationPipeline:
         summary = self._summarize(
             self.llm, query, summary_input,
             preset=preset, custom_instructions="", system_prompt_override=None,
+            batch_chars=summary_batch_chars,
         )
 
         inv_id = self._repo.save_investigation(

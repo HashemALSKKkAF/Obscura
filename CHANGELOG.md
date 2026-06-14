@@ -19,6 +19,14 @@ Theme: **deeper dark-web reach + retrieval-grounded reporting.**
   Opt-in per investigation (`use_rag=true`).
 - Pipeline + `/api/investigate` wired for both stages; defaults preserve the
   classic single-hop flow.
+- **Parallel deep crawl** — the frontier is fetched in concurrent waves
+  (`max_workers`), turning wall-clock `O(pages × latency)` into
+  ~`O(pages / workers × latency)` while keeping relevance order.
+- **Map-reduce summarization** (`summarizer.py`) — content is batched to a token
+  budget, each batch is summarized (map), then synthesized into the final report
+  (reduce, recursive if needed). The model now processes **all** gathered
+  content instead of only what fit in one prompt; single-batch investigations
+  still make exactly one call.
 
 ### Planned
 - **Automation (tentative)** — optional n8n workflows to trigger/schedule

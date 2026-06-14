@@ -13,6 +13,7 @@ import deep_search
 import investigations as inv_db
 import rag
 import seeds as seed_db
+import summarizer
 from crawler import crawl_sources, probe_tier
 from export import generate_pdf
 from llm import generate_summary, get_llm
@@ -214,6 +215,7 @@ def api_investigate():
     deep_max_pages = _as_int(data.get("deep_max_pages"), deep_search.DEFAULT_MAX_PAGES)
     use_rag = _as_bool(data.get("use_rag"))
     rag_top_k = _as_int(data.get("rag_top_k"), rag.DEFAULT_TOP_K)
+    summary_batch_chars = _as_int(data.get("summary_batch_chars"), summarizer.DEFAULT_BATCH_CHARS)
 
     try:
         llm = get_llm(model)
@@ -230,6 +232,7 @@ def api_investigate():
                 max_content_chars=max_content_chars,
                 deep=deep, deep_max_depth=deep_max_depth, deep_max_pages=deep_max_pages,
                 use_rag=use_rag, rag_top_k=rag_top_k,
+                summary_batch_chars=summary_batch_chars,
             ):
                 if event.get("done"):
                     inv = inv_db.load_one(event["inv_id"])
