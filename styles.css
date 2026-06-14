@@ -1571,6 +1571,48 @@ body {
   width: 100%;
 }
 
+/* ── Deep Search & RAG (0.4.0) controls ─────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  margin-left: 6px;
+  border-radius: 6px;
+  background-color: var(--primary-color);
+  color: #fff;
+  vertical-align: middle;
+}
+
+.toggle-group {
+  margin-bottom: 12px;
+}
+
+.switch-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 0;
+}
+
+.switch-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 .btn {
   padding: 10px 20px;
   border-radius: 8px;

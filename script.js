@@ -23,6 +23,12 @@ const state = {
     maxResults: 50,
     maxScrape: 10,
     maxContentChars: 2000,
+    // 0.4.0 opt-in stages
+    deep: false,
+    deepDepth: 2,
+    deepPages: 25,
+    useRag: false,
+    ragTopK: 8,
     selectedPreset: "",
     selectedPresetMeta: null,
     query: "",
@@ -95,6 +101,16 @@ const elements = {
     threadsValue: getEl("threadsValue"),
     maxResultsInput: getEl("maxResultsInput"),
     maxResultsValue: getEl("maxResultsValue"),
+    deepToggle: getEl("deepToggle"),
+    deepOptions: getEl("deepOptions"),
+    deepDepthInput: getEl("deepDepthInput"),
+    deepDepthValue: getEl("deepDepthValue"),
+    deepPagesInput: getEl("deepPagesInput"),
+    deepPagesValue: getEl("deepPagesValue"),
+    ragToggle: getEl("ragToggle"),
+    ragOptions: getEl("ragOptions"),
+    ragTopKInput: getEl("ragTopKInput"),
+    ragTopKValue: getEl("ragTopKValue"),
     presetSelect: getEl("presetSelect"),
     customPresetFields: getEl("customPresetFields"),
     customPrompt: getEl("customPrompt"),
@@ -775,14 +791,19 @@ async function handleSearch(e, queryOverride = null) {
         max_results: state.maxResults,
         max_scrape: state.maxScrape,
         max_content_chars: state.maxContentChars,
+        deep: state.deep,
+        deep_max_depth: state.deepDepth,
+        deep_max_pages: state.deepPages,
+        use_rag: state.useRag,
+        rag_top_k: state.ragTopK,
     };
 
     const steps = [
         { key: 'refining', label: 'Refine' },
         { key: 'searching', label: 'Search' },
         { key: 'filtering', label: 'Filter' },
-        { key: 'scraping', label: 'Scrape' },
-        { key: 'generating', label: 'Report' }
+        { key: 'scraping', label: state.deep ? 'Deep Crawl' : 'Scrape' },
+        { key: 'generating', label: state.useRag ? 'Retrieve + Report' : 'Report' }
     ];
 
     const getActiveStep = (status) => {
@@ -790,8 +811,8 @@ async function handleSearch(e, queryOverride = null) {
         if (s.includes('refining')) return 0;
         if (s.includes('searching')) return 1;
         if (s.includes('filtering')) return 2;
-        if (s.includes('scraping')) return 3;
-        if (s.includes('generating')) return 4;
+        if (s.includes('scraping') || s.includes('deep crawl')) return 3;
+        if (s.includes('indexing') || s.includes('generating')) return 4;
         return 0;
     };
 
@@ -1117,6 +1138,27 @@ function setupEventListeners() {
     elements.maxResultsInput.oninput = (e) => {
         state.maxResults = e.target.value;
         elements.maxResultsValue.textContent = e.target.value;
+    };
+    // Deep Search & RAG (0.4.0)
+    elements.deepToggle.onchange = (e) => {
+        state.deep = e.target.checked;
+        elements.deepOptions.classList.toggle("hidden", !e.target.checked);
+    };
+    elements.deepDepthInput.oninput = (e) => {
+        state.deepDepth = Number(e.target.value);
+        elements.deepDepthValue.textContent = e.target.value;
+    };
+    elements.deepPagesInput.oninput = (e) => {
+        state.deepPages = Number(e.target.value);
+        elements.deepPagesValue.textContent = e.target.value;
+    };
+    elements.ragToggle.onchange = (e) => {
+        state.useRag = e.target.checked;
+        elements.ragOptions.classList.toggle("hidden", !e.target.checked);
+    };
+    elements.ragTopKInput.oninput = (e) => {
+        state.ragTopK = Number(e.target.value);
+        elements.ragTopKValue.textContent = e.target.value;
     };
     elements.presetSelect.onchange = (e) => {
         state.selectedPreset = e.target.value;
