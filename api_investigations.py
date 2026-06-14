@@ -9,7 +9,9 @@ from datetime import datetime
 
 from flask import Blueprint, Response, jsonify, make_response, request
 
+import deep_search
 import investigations as inv_db
+import rag
 import seeds as seed_db
 from crawler import crawl_sources, probe_tier
 from export import generate_pdf
@@ -47,6 +49,15 @@ def _as_int(value, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    """Coerce a request value (JSON bool, or "true"/"1"/"yes" string) to bool."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes", "on")
+    return default
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -197,6 +208,13 @@ def api_investigate():
     max_scrape = _as_int(data.get("max_scrape"), 10)
     max_content_chars = _as_int(data.get("max_content_chars"), 2000)
 
+    # 0.4.0 opt-in stages (default off → classic single-hop + raw-content flow).
+    deep = _as_bool(data.get("deep"))
+    deep_max_depth = _as_int(data.get("deep_max_depth"), deep_search.DEFAULT_MAX_DEPTH)
+    deep_max_pages = _as_int(data.get("deep_max_pages"), deep_search.DEFAULT_MAX_PAGES)
+    use_rag = _as_bool(data.get("use_rag"))
+    rag_top_k = _as_int(data.get("rag_top_k"), rag.DEFAULT_TOP_K)
+
     try:
         llm = get_llm(model)
     except ValueError as exc:
@@ -210,6 +228,8 @@ def api_investigate():
                 query=query, model=model, preset=preset, threads=threads,
                 max_results=max_results, max_scrape=max_scrape,
                 max_content_chars=max_content_chars,
+                deep=deep, deep_max_depth=deep_max_depth, deep_max_pages=deep_max_pages,
+                use_rag=use_rag, rag_top_k=rag_top_k,
             ):
                 if event.get("done"):
                     inv = inv_db.load_one(event["inv_id"])
@@ -218,6 +238,9 @@ def api_investigate():
                         "results": event["results"],
                         "filtered": event["filtered"],
                         "scraped": event["scraped"],
+                        "deep": event.get("deep", False),
+                        "deep_pages": event.get("deep_pages", 0),
+                        "rag": event.get("rag", False),
                         "done": True,
                     })
                     yield _sse(response)

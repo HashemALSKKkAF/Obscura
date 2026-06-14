@@ -97,3 +97,11 @@ def test_tor_newnym_error_passthrough(client, monkeypatch):
     monkeypatch.setattr(tor_utils, "refresh_tor_circuit", lambda *a, **k: {"status": "error", "message": "no control port"})
     body = client.post("/api/tor/newnym").get_json()
     assert body["status"] == "error"
+
+
+def test_as_bool_coercion():
+    from api_investigations import _as_bool
+    assert _as_bool(True) is True
+    assert _as_bool("true") is True and _as_bool("1") is True and _as_bool("yes") is True
+    assert _as_bool("false") is False and _as_bool(None) is False
+    assert _as_bool("nonsense") is False

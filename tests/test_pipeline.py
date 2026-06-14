@@ -62,3 +62,68 @@ def test_pipeline_passes_preset_through_to_summarize():
     )
     list(pipe.run(query="q", model="m", preset="ransomware_malware"))
     assert captured["preset"] == "ransomware_malware"
+
+
+# ── 0.4.0 opt-in paths ───────────────────────────────────────────────────────
+
+def _base_pipe(**overrides):
+    kwargs = dict(
+        llm="L",
+        refine=lambda llm, q: f"refined:{q}",
+        search=lambda refined, max_workers=5: [{"link": "http://a.onion", "title": "t"}],
+        filter_fn=lambda llm, refined, results: results,
+        scrape=lambda filtered, max_workers=5, max_return_chars=2000: {"http://a.onion": "SHALLOW"},
+        summarize=lambda llm, q, content, **kw: "SUMMARY",
+        repo=_FakeRepo(),
+    )
+    kwargs.update(overrides)
+    return InvestigationPipeline(**kwargs)
+
+
+def test_deep_path_replaces_scrape_with_deep_crawl():
+    calls = {"deep": 0, "scrape": 0}
+
+    def fake_deep_crawl(seeds, query, *, max_depth, max_pages):
+        calls["deep"] += 1
+        return ["page-objs"]  # opaque; mapped below
+
+    pipe = _base_pipe(
+        deep_crawl=fake_deep_crawl,
+        to_content_map=lambda pages: {"http://a.onion": "DEEP", "http://b.onion": "DEEP2"},
+        scrape=lambda *a, **k: calls.__setitem__("scrape", calls["scrape"] + 1) or {},
+    )
+    final = list(pipe.run(query="q", model="m", deep=True))[-1]
+    assert calls["deep"] == 1 and calls["scrape"] == 0   # deep crawl used, scrape skipped
+    assert final["deep"] is True and final["deep_pages"] == 2
+    assert final["scraped"] == {"http://a.onion": "DEEP", "http://b.onion": "DEEP2"}
+
+
+def test_rag_path_feeds_retrieved_context_to_summarize():
+    captured = {}
+
+    class _FakeIndex:
+        def add_content(self, content):
+            captured["indexed"] = content
+        def build_context(self, query, k):
+            captured["k"] = k
+            return "RETRIEVED-CONTEXT"
+
+    pipe = _base_pipe(
+        summarize=lambda llm, q, content, **kw: captured.setdefault("content", content) or "S",
+        index_factory=lambda: _FakeIndex(),
+    )
+    final = list(pipe.run(query="q", model="m", use_rag=True, rag_top_k=5))[-1]
+    assert captured["indexed"] == {"http://a.onion": "SHALLOW"}  # scraped content indexed
+    assert captured["content"] == "RETRIEVED-CONTEXT"            # retrieval fed to LLM
+    assert captured["k"] == 5
+    assert final["rag"] is True
+
+
+def test_default_path_unchanged_no_deep_no_rag():
+    captured = {}
+    pipe = _base_pipe(
+        summarize=lambda llm, q, content, **kw: captured.setdefault("content", content) or "S",
+    )
+    final = list(pipe.run(query="q", model="m"))[-1]
+    assert captured["content"] == {"http://a.onion": "SHALLOW"}  # raw scrape, no retrieval
+    assert final["deep"] is False and final["rag"] is False

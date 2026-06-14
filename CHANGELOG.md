@@ -8,11 +8,19 @@ All notable changes to OBSCURA are documented here. The format is based on
 
 Theme: **deeper dark-web reach + retrieval-grounded reporting.**
 
+### Added
+- **Deep search** (`deep_search.py`) — relevance-guided best-first crawl that
+  follows links out of crawled pages into onion services, bounded by a scored
+  priority frontier (max depth + page budget). Opt-in per investigation
+  (`deep=true`).
+- **RAG** (`rag.py`) — crawled content is chunked, embedded **locally**
+  (FastEmbed/ONNX, no data egress), indexed (Chroma or in-memory), and the most
+  query-relevant chunks are retrieved for the report instead of truncating.
+  Opt-in per investigation (`use_rag=true`).
+- Pipeline + `/api/investigate` wired for both stages; defaults preserve the
+  classic single-hop flow.
+
 ### Planned
-- **Deep search** — recursive, relevance-guided crawling beyond the first hop:
-  onion-link extraction from crawled pages and a scored crawl frontier.
-- **RAG** — embed crawled content into a vector store and retrieve the most
-  relevant chunks for the report, replacing fixed truncation.
 - **Automation (tentative)** — optional n8n workflows to trigger/schedule
   investigations via the API.
 
