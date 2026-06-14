@@ -17,6 +17,14 @@ langchain_google_genai
 openai
 google-api-core
 
+# RAG (0.4.0) — local-only retrieval over crawled content.
+#   fastembed: ONNX embeddings computed on-box (no API, no data egress)
+#   chromadb:  embedded vector store (persists to disk)
+#   numpy:     in-memory cosine store + vector math
+fastembed
+chromadb
+numpy
+
 # Reporting + configuration
 reportlab
 python-dotenv
