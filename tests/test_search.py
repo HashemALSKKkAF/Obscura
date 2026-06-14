@@ -84,3 +84,24 @@ def test_get_search_results_collapses_scheme_variants(monkeypatch):
     monkeypatch.setattr(search, "fetch_search_results", lambda *a, **k: list(canned))
     out = search.get_search_results("anything", max_workers=1)
     assert len(out) == 1   # http + https + trailing slash → one entry
+
+
+def test_get_search_results_returns_partial_on_deadline(monkeypatch):
+    """A few slow/dead engines must not stall the whole search — the deadline
+    returns whatever responded in time."""
+    import time
+    monkeypatch.setattr(search, "SEARCH_DEADLINE", 1)
+    fast = search.DEFAULT_SEARCH_ENGINES[0]
+
+    def fake_fetch(endpoint, query, name=""):
+        if endpoint == fast:
+            return [{"title": "fast hit", "link": f"{ONION_URL}/fast"}]
+        time.sleep(5)  # slower than the 1s deadline → abandoned
+        return [{"title": "slow", "link": f"{ONION_URL}/slow"}]
+
+    monkeypatch.setattr(search, "fetch_search_results", fake_fetch)
+    start = time.time()
+    out = search.get_search_results("q", max_workers=16)
+    elapsed = time.time() - start
+    assert elapsed < 3                                   # didn't wait for the 5s engines
+    assert any("fast" in r["title"] for r in out)        # fast engine's result kept

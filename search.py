@@ -16,7 +16,7 @@ import re
 import random
 import logging
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 
 import tor_session
 from constants import USER_AGENTS
@@ -50,6 +50,12 @@ SEARCH_ENGINES = [
 ]
 
 DEFAULT_SEARCH_ENGINES = [e["url"] for e in SEARCH_ENGINES]
+
+# Best-effort fan-out tuning. Search engines are fail-fast: a short timeout, no
+# retries, and an overall wall-clock deadline so a few dead/slow onions can't
+# stall the whole investigation. (Connect, read) timeout in seconds.
+SEARCH_TIMEOUT = (10, 20)
+SEARCH_DEADLINE = 45
 
 # Onion URL pattern reused across parsers
 _ONION_URL_RE = re.compile(r'https?://[a-z2-7]{16,56}\.onion[^\s"\'<>]*')
@@ -285,11 +291,12 @@ def fetch_search_results(endpoint: str, query: str, engine_name: str = "") -> li
     """
     url = endpoint.format(query=query)
     headers = {"User-Agent": random.choice(USER_AGENTS)}
-    session = tor_session.get_tor_session()
+    # retries=0: a dead engine should fail fast, not retry 3× at the timeout.
+    session = tor_session.get_tor_session(retries=0)
     parser_fn = _ENGINE_PARSERS.get(engine_name, _parse_generic)
 
     try:
-        response = session.get(url, headers=headers, timeout=40)
+        response = session.get(url, headers=headers, timeout=SEARCH_TIMEOUT)
         if response.status_code != 200:
             return []
         soup = BeautifulSoup(response.text, "html.parser")
@@ -316,15 +323,32 @@ def get_search_results(refined_query: str, max_workers: int = 5) -> list:
     engine_map = {e["url"]: e["name"] for e in SEARCH_ENGINES}
 
     raw_results: list = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(
-                fetch_search_results, endpoint, refined_query, engine_map[endpoint]
-            ): endpoint
-            for endpoint in DEFAULT_SEARCH_ENGINES
-        }
-        for future in as_completed(futures):
-            raw_results.extend(future.result())
+    # Don't use the context manager's blocking shutdown — it would wait for
+    # every straggler thread and defeat the deadline. We collect whatever
+    # finished within SEARCH_DEADLINE and abandon the rest (their short
+    # per-request timeout means they die on their own shortly after).
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    futures = {
+        executor.submit(
+            fetch_search_results, endpoint, refined_query, engine_map[endpoint]
+        ): endpoint
+        for endpoint in DEFAULT_SEARCH_ENGINES
+    }
+    completed = 0
+    try:
+        for future in as_completed(futures, timeout=SEARCH_DEADLINE):
+            completed += 1
+            try:
+                raw_results.extend(future.result())
+            except Exception as exc:  # noqa: BLE001 — one engine failing is normal
+                _logger.debug("search engine future failed: %s", exc)
+    except FuturesTimeout:
+        _logger.warning(
+            "search deadline (%ss) hit — proceeding with %d/%d engines that responded.",
+            SEARCH_DEADLINE, completed, len(futures),
+        )
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     # Deduplicate by a normalised key (scheme-insensitive, host-lowercased).
     seen_links: set = set()

@@ -22,13 +22,20 @@ import obscura_config
 _thread_local = threading.local()
 
 
-def _build_session(use_tor: bool = True) -> requests.Session:
-    """Create a requests Session with retries (and, optionally, the Tor proxy)."""
+def _build_session(use_tor: bool = True, retries: int = 3) -> requests.Session:
+    """Create a requests Session with retries (and, optionally, the Tor proxy).
+
+    ``retries`` is configurable because the right value depends on the caller:
+    scraping a chosen source wants resilience (retry transient onion failures),
+    but *search* aggregation is best-effort fan-out across many engines — there,
+    retrying a dead engine 3× at a 40s timeout costs ~160s for nothing, so
+    callers pass ``retries=0`` to fail fast and move on.
+    """
     session = requests.Session()
     retry = Retry(
-        total=3,
-        read=3,
-        connect=3,
+        total=retries,
+        read=retries,
+        connect=retries,
         backoff_factor=0.3,
         status_forcelist=[500, 502, 503, 504],
         allowed_methods=frozenset(["GET", "HEAD"]),
@@ -56,6 +63,7 @@ def get_session(use_tor: bool = True) -> requests.Session:
     return getattr(_thread_local, key)
 
 
-def get_tor_session() -> requests.Session:
-    """Return a fresh Tor SOCKS5 session with automatic retries."""
-    return _build_session(use_tor=True)
+def get_tor_session(retries: int = 3) -> requests.Session:
+    """Return a fresh Tor SOCKS5 session. Pass ``retries=0`` for best-effort,
+    fail-fast callers (e.g. search-engine fan-out)."""
+    return _build_session(use_tor=True, retries=retries)

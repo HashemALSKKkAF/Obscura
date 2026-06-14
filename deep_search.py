@@ -152,8 +152,10 @@ def fetch_page(url: str, title_hint: str = "") -> PageResult:
     }
     response = None
     try:
-        session = tor_session.get_tor_session()
-        response = session.get(url, headers=headers, timeout=(10, 45), stream=True)
+        # retries=0: deep crawl visits many pages under a budget; a slow/dead
+        # onion should fail fast so the wave moves on, not retry 3× at timeout.
+        session = tor_session.get_tor_session(retries=0)
+        response = session.get(url, headers=headers, timeout=(10, 30), stream=True)
         if response.status_code != 200:
             return PageResult(url=url, title=title_hint, error=f"HTTP {response.status_code}")
 
