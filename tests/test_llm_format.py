@@ -22,3 +22,15 @@ def test_final_string_truncate_mode_shortens_title_and_drops_link():
     assert "..." in out
     assert "x" * 30 in out
     assert ONION_URL not in out      # link blanked in truncate mode
+
+
+def test_clean_refined_query_strips_whitespace_quotes_and_labels():
+    assert llm._clean_refined_query("\n\nransomware leak\n") == "ransomware leak"
+    assert llm._clean_refined_query('  "data breach forum"  ') == "data breach forum"
+    assert llm._clean_refined_query("Refined Query: stolen credentials") == "stolen credentials"
+    assert llm._clean_refined_query("multi   space\tquery") == "multi space query"
+
+
+def test_clean_refined_query_falls_back_when_empty():
+    assert llm._clean_refined_query("", fallback="original query") == "original query"
+    assert llm._clean_refined_query("   \n  ", fallback="orig") == "orig"

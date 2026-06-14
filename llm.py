@@ -165,7 +165,23 @@ def refine_query(llm, user_input):
         [("system", system_prompt), ("user", "{query}")]
     )
     chain = prompt_template | llm | StrOutputParser()
-    return _invoke_with_retry(chain, {"query": user_input}, stage="refine_query")
+    refined = _invoke_with_retry(chain, {"query": user_input}, stage="refine_query")
+    return _clean_refined_query(refined, fallback=user_input)
+
+
+def _clean_refined_query(refined: str, fallback: str = "") -> str:
+    """Normalise the model's refined query before it hits a search URL.
+
+    Models routinely wrap the answer in newlines, quotes, or a 'Query:' preamble.
+    Left raw, those characters get URL-encoded into every engine request
+    (e.g. ``%0A%0Aransomware``), which degrades or breaks results. We collapse
+    whitespace, strip wrapping quotes/labels, and fall back to the user's
+    original query if the model returned nothing usable.
+    """
+    text = " ".join((refined or "").split())          # collapse all whitespace
+    text = re.sub(r'^(refined query|query|output)\s*[:\-]\s*', "", text, flags=re.IGNORECASE)
+    text = text.strip().strip('"').strip("'").strip()
+    return text or " ".join((fallback or "").split())
 
 
 def _filter_batch(llm, query: str, batch: list, batch_offset: int) -> list:

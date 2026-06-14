@@ -27,6 +27,7 @@ import itertools
 import logging
 import random
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
@@ -48,6 +49,7 @@ DEFAULT_MAX_PAGES = 25
 DEFAULT_PER_PAGE_LINKS = 10
 DEFAULT_MIN_LINK_SCORE = 1
 DEFAULT_MAX_WORKERS = 5
+DEFAULT_DEADLINE = 120  # overall wall-clock cap (s) — dead onions can't run forever
 MAX_EXTRACTED_TEXT_CHARS = 50_000
 MAX_DOWNLOAD_BYTES = 1_000_000
 
@@ -227,6 +229,7 @@ def deep_crawl(
     per_page_links: int = DEFAULT_PER_PAGE_LINKS,
     min_link_score: float = DEFAULT_MIN_LINK_SCORE,
     max_workers: int = DEFAULT_MAX_WORKERS,
+    deadline: float = DEFAULT_DEADLINE,
     progress_callback=None,
 ) -> list[PageResult]:
     """Best-first deep crawl starting from *seeds*, guided by *query*.
@@ -265,8 +268,13 @@ def deep_crawl(
             frontier.push(url, title, 0, score=1e6 + relevance_score(title, terms))
 
     results: list[PageResult] = []
+    started = time.monotonic()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         while frontier and len(results) < max_pages:
+            if time.monotonic() - started > deadline:
+                _logger.warning("[DeepSearch] deadline %ss hit — stopping with %d pages.",
+                                 deadline, len(results))
+                break
             # Pop a wave of unvisited candidates (single-threaded; the frontier
             # and visited set are only mutated here, so no locking is needed).
             wave: list[tuple[str, str, int]] = []
