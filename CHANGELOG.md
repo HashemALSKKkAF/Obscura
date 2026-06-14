@@ -4,6 +4,18 @@ All notable changes to OBSCURA are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — 0.4.0 (in progress)
+
+Theme: **deeper dark-web reach + retrieval-grounded reporting.**
+
+### Planned
+- **Deep search** — recursive, relevance-guided crawling beyond the first hop:
+  onion-link extraction from crawled pages and a scored crawl frontier.
+- **RAG** — embed crawled content into a vector store and retrieve the most
+  relevant chunks for the report, replacing fixed truncation.
+- **Automation (tentative)** — optional n8n workflows to trigger/schedule
+  investigations via the API.
+
 ## [0.3.1] — 2026-06-13
 
 First packaged release. OBSCURA is now distributable as a self-contained tool:
