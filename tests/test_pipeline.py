@@ -83,7 +83,7 @@ def _base_pipe(**overrides):
 def test_deep_path_replaces_scrape_with_deep_crawl():
     calls = {"deep": 0, "scrape": 0}
 
-    def fake_deep_crawl(seeds, query, *, max_depth, max_pages):
+    def fake_deep_crawl(seeds, query, *, max_depth, max_pages, max_workers):
         calls["deep"] += 1
         return ["page-objs"]  # opaque; mapped below
 

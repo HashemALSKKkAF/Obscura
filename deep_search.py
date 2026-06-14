@@ -27,6 +27,7 @@ import itertools
 import logging
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
@@ -46,6 +47,7 @@ DEFAULT_MAX_DEPTH = 2
 DEFAULT_MAX_PAGES = 25
 DEFAULT_PER_PAGE_LINKS = 10
 DEFAULT_MIN_LINK_SCORE = 1
+DEFAULT_MAX_WORKERS = 5
 MAX_EXTRACTED_TEXT_CHARS = 50_000
 MAX_DOWNLOAD_BYTES = 1_000_000
 
@@ -222,9 +224,17 @@ def deep_crawl(
     max_pages: int = DEFAULT_MAX_PAGES,
     per_page_links: int = DEFAULT_PER_PAGE_LINKS,
     min_link_score: float = DEFAULT_MIN_LINK_SCORE,
+    max_workers: int = DEFAULT_MAX_WORKERS,
     progress_callback=None,
 ) -> list[PageResult]:
     """Best-first deep crawl starting from *seeds*, guided by *query*.
+
+    Crawls in **waves**: each iteration pops the current best ``max_workers``
+    candidates off the frontier and fetches them concurrently, then expands
+    their children back onto the frontier. Onion fetches are network-bound
+    (10–45s each), so this turns wall-clock ``O(pages × latency)`` into roughly
+    ``O(pages / max_workers × latency)`` while keeping the relevance-guided
+    order: a wave always takes the highest-scoring pending links.
 
     Args:
         seeds:           Seed results as dicts ({"link"/"url", "title"}) or URL strings.
@@ -234,6 +244,7 @@ def deep_crawl(
         max_pages:       Hard cap on pages fetched — the crawl's global budget.
         per_page_links:  Max child links enqueued from any single page.
         min_link_score:  Drop child links scoring below this (0 keeps everything).
+        max_workers:     Concurrent fetches per wave.
         progress_callback: Optional ``callable(fetched_count, max_pages)``.
 
     Returns:
@@ -242,6 +253,7 @@ def deep_crawl(
     terms = query_terms(query)
     frontier = _Frontier()
     visited: set[str] = set()
+    workers = max(1, int(max_workers))
 
     for seed in seeds:
         url, title = _seed_fields(seed)
@@ -251,51 +263,76 @@ def deep_crawl(
             frontier.push(url, title, 0, score=1e6 + relevance_score(title, terms))
 
     results: list[PageResult] = []
-    while frontier and len(results) < max_pages:
-        url, anchor, depth, _score = frontier.pop()
-        key = _dedup_key(url)
-        if key in visited:
-            continue
-        visited.add(key)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        while frontier and len(results) < max_pages:
+            # Pop a wave of unvisited candidates (single-threaded; the frontier
+            # and visited set are only mutated here, so no locking is needed).
+            wave: list[tuple[str, str, int]] = []
+            while frontier and len(wave) < workers and (len(results) + len(wave)) < max_pages:
+                url, anchor, depth, _score = frontier.pop()
+                key = _dedup_key(url)
+                if key in visited:
+                    continue
+                visited.add(key)
+                wave.append((url, anchor, depth))
+            if not wave:
+                continue
 
-        page = fetch(url, anchor)
-        page.depth = depth
-        page.score = relevance_score(f"{page.title} {page.text}", terms)
-        if not page.success:
-            continue
+            futures = {pool.submit(fetch, u, a): (u, a, d) for (u, a, d) in wave}
+            fetched: list[PageResult] = []
+            for future in as_completed(futures):
+                _u, _a, depth = futures[future]
+                try:
+                    page = future.result()
+                except Exception as exc:  # noqa: BLE001 — one bad fetch can't kill the wave
+                    _logger.debug("[DeepSearch] worker error: %s", exc)
+                    continue
+                page.depth = depth
+                page.score = relevance_score(f"{page.title} {page.text}", terms)
+                fetched.append(page)
 
-        results.append(page)
-        if progress_callback:
-            try:
-                progress_callback(len(results), max_pages)
-            except Exception:  # noqa: BLE001 — progress is best-effort
-                pass
-
-        if depth < max_depth:
-            scored_children = sorted(
-                (
-                    (_link_score(child_url, child_anchor, terms), child_url, child_anchor)
-                    for child_url, child_anchor in page.links
-                    if _dedup_key(child_url) not in visited
-                ),
-                key=lambda t: t[0],
-                reverse=True,
-            )
-            enqueued = 0
-            for child_score, child_url, child_anchor in scored_children:
-                if enqueued >= per_page_links:
-                    break
-                if child_score < min_link_score:
-                    break  # sorted desc — nothing below clears the bar either
-                if frontier.push(child_url, child_anchor, depth + 1, child_score):
-                    enqueued += 1
+            # Process highest-scoring pages first so expansion order is
+            # deterministic regardless of which fetch finished first.
+            fetched.sort(key=lambda p: p.score, reverse=True)
+            for page in fetched:
+                if not page.success or len(results) >= max_pages:
+                    continue
+                results.append(page)
+                if progress_callback:
+                    try:
+                        progress_callback(len(results), max_pages)
+                    except Exception:  # noqa: BLE001 — progress is best-effort
+                        pass
+                if page.depth < max_depth:
+                    _expand(frontier, page, terms, visited, per_page_links, min_link_score)
 
     results.sort(key=lambda p: p.score, reverse=True)
     _logger.info(
-        "[DeepSearch] crawled %d pages (depth≤%d, budget=%d) for query=%r",
-        len(results), max_depth, max_pages, query,
+        "[DeepSearch] crawled %d pages (depth≤%d, budget=%d, workers=%d) for query=%r",
+        len(results), max_depth, max_pages, workers, query,
     )
     return results
+
+
+def _expand(frontier, page, terms, visited, per_page_links, min_link_score) -> None:
+    """Score *page*'s outbound links and push the best onto *frontier*."""
+    scored_children = sorted(
+        (
+            (_link_score(child_url, child_anchor, terms), child_url, child_anchor)
+            for child_url, child_anchor in page.links
+            if _dedup_key(child_url) not in visited
+        ),
+        key=lambda t: t[0],
+        reverse=True,
+    )
+    enqueued = 0
+    for child_score, child_url, child_anchor in scored_children:
+        if enqueued >= per_page_links:
+            break
+        if child_score < min_link_score:
+            break  # sorted desc — nothing below clears the bar either
+        if frontier.push(child_url, child_anchor, page.depth + 1, child_score):
+            enqueued += 1
 
 
 def _seed_fields(seed) -> tuple[str, str]:

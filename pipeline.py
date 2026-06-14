@@ -103,6 +103,7 @@ class InvestigationPipeline:
             pages = self._deep_crawl(
                 filtered, refined,
                 max_depth=deep_max_depth, max_pages=deep_max_pages,
+                max_workers=threads,
             )
             content = self._to_content_map(pages)
             deep_pages = len(content)

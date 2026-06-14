@@ -134,3 +134,39 @@ def test_deep_crawl_results_sorted_by_score_desc():
 def test_to_content_map_shape():
     pages = [PageResult(url=url("a"), title="T", text="body", success=True)]
     assert deep_search.to_content_map(pages) == {url("a"): "T - body"}
+
+
+def test_deep_crawl_fetches_a_wave_concurrently():
+    # 4 seeds each sleep; with max_workers=4 they overlap, so wall-clock should
+    # be far less than the serial sum (4 x 0.1s = 0.4s).
+    import time
+    seeds = [url(x) for x in "abcd"]
+
+    def slow_fetch(u, title_hint=""):
+        time.sleep(0.1)
+        return PageResult(url=u, title=title_hint, text="market", success=True)
+
+    start = time.time()
+    pages = deep_crawl(
+        [{"link": u} for u in seeds], "market", fetch=slow_fetch,
+        max_depth=0, max_pages=4, max_workers=4, min_link_score=0,
+    )
+    elapsed = time.time() - start
+    assert len(pages) == 4
+    assert elapsed < 0.3  # concurrent, not the 0.4s+ a serial crawl would take
+
+
+def test_deep_crawl_concurrent_still_dedups_diamond():
+    a, b, c, d = (url(x) for x in "abcd")
+    graph = {
+        a: ("market top", [b, c]),
+        b: ("market left", [d]),
+        c: ("market right", [d]),
+        d: ("market bottom", []),
+    }
+    pages = deep_crawl(
+        [{"link": a}], "market", fetch=_graph_fetch(graph),
+        max_depth=3, max_pages=20, max_workers=4, min_link_score=0,
+    )
+    urls = [p.url for p in pages]
+    assert urls.count(d) == 1 and set(urls) == {a, b, c, d}
